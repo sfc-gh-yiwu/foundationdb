@@ -1401,4 +1401,136 @@ namespace actorcompiler
                 return string.Format("std::max(0, loopDepth - {0})", subtract);
         }
     }
+
+    class CoroContext
+    {
+        public TextWriter writer;
+        public int indent = 1;
+
+        public CoroContext(TextWriter writer)
+        {
+            this.writer = writer;
+        }
+    }
+
+    class CoroCompiler
+    {
+        Actor actor;
+        public CoroCompiler(Actor actor)
+        {
+            this.actor = actor;
+        }
+
+        public void Write(TextWriter writer)
+        {
+            if (actor.parameters.Length > 0) {
+                throw new Error(actor.SourceLine, "Actor parameter not supported yet");
+            }
+            writer.WriteLine("{0} {1}() {{", actor.returnType == "Void" ? "void" : actor.returnType, actor.name);
+            Compile(actor.body, new CoroContext(writer));
+            writer.WriteLine("}");
+        }
+
+        void WriteIndent(CoroContext ctx)
+        {
+            for (int i = 0; i < ctx.indent; i++)
+            {
+                ctx.writer.Write("    ");
+            }
+        }
+
+        void Compile(CodeBlock block, CoroContext ctx)
+        {
+            foreach (var stmt in block.statements)
+            {
+                CompileStatement(stmt, ctx);
+            }
+        }
+
+        void CompileStatement(Statement stmt, CoroContext ctx)
+        {
+            // Use reflection for double dispatch.  SOMEDAY: Use a Dictionary<string,Action<Statement,Context>> and expression trees to memoize
+            var method = typeof(CoroCompiler).GetMethod("CompileStatement", 
+                System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.ExactBinding, 
+                null, new Type[] { stmt.GetType(), typeof(CoroContext) }, null);
+            if (method == null)
+                throw new Error(stmt.FirstSourceLine, "Statement type {0} not supported yet.", stmt.GetType().Name);
+            try
+            {
+                method.Invoke(this, new object[] { stmt, ctx });
+            }
+            catch (System.Reflection.TargetInvocationException e)
+            {
+                if (!(e.InnerException is Error))
+                    Console.Error.WriteLine("\tHit error <{0}> for statement type {1} at line {2}\n\tStack Trace:\n{3}", 
+                        e.InnerException.Message, stmt.GetType().Name, stmt.FirstSourceLine, e.InnerException.StackTrace);
+                throw e.InnerException;
+            }
+        }
+
+        void CompileStatement(StateDeclarationStatement stmt, CoroContext ctx)
+        {
+            CompileStatement(stmt.decl, ctx);
+        }
+
+        void CompileStatement(VarDeclaration stmt, CoroContext ctx)
+        {
+            if (stmt.initializer == "" || stmt.initializerConstructorSyntax)
+            {
+                WriteIndent(ctx);
+                ctx.writer.WriteLine("{1} {0} = {1}({2});", stmt.name, stmt.type, stmt.initializer);
+            }
+            else
+            {
+                WriteIndent(ctx);
+                ctx.writer.WriteLine("{1} {0} = {2};", stmt.name, stmt.type, stmt.initializer);
+            }
+        }
+
+        void CompileStatement(LoopStatement stmt, CoroContext ctx)
+        {
+            var equivalent = new ForStatement
+            {
+                body = stmt.body,
+                FirstSourceLine = stmt.FirstSourceLine
+            };
+            CompileStatement(equivalent, ctx);
+        }
+
+        void CompileStatement(ForStatement stmt, CoroContext ctx)
+        {
+            WriteIndent(ctx);
+            ctx.writer.WriteLine("for ({0}; {1}; {2}) {{", stmt.initExpression, stmt.condExpression, stmt.nextExpression);
+            ctx.indent++;
+            CompileStatement(stmt.body, ctx);
+            ctx.indent--;
+            WriteIndent(ctx);
+            ctx.writer.WriteLine("}");
+        }
+
+        void CompileStatement(CodeBlock stmt, CoroContext ctx)
+        {
+            Compile(stmt, ctx);
+        }
+
+        void CompileStatement(WaitStatement stmt, CoroContext ctx)
+        {
+            if (stmt.result.type == "Void")
+            {
+                WriteIndent(ctx);
+                ctx.writer.WriteLine("co_await({0});", stmt.futureExpression);
+            }
+            else
+            {
+                WriteIndent(ctx);
+                ctx.writer.WriteLine("{0} {1} = co_await({2});", stmt.result.type, stmt.result.name, stmt.futureExpression);
+            }
+        }
+
+        void CompileStatement(PlainOldCodeStatement stmt, CoroContext ctx)
+        {
+            WriteIndent(ctx);
+            ctx.writer.WriteLine(stmt.code);
+        }
+    }
 }

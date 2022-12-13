@@ -32,11 +32,7 @@
 #include <iostream>
 #include "flow/actorcompiler.h"
 
-#define ALLOW_CORO
-
 NetworkAddress serverAddress;
-
-#undef ALLOW_CORO
 
 enum TutorialWellKnownEndpoints {
 	WLTOKEN_SIMPLE_KV_SERVER = WLTOKEN_FIRST_AVAILABLE,
@@ -61,6 +57,24 @@ ACTOR Future<Void> simpleTimer() {
 		std::cout << format("Time: %.2f\n", g_network->now() - start_time);
 	}
 }
+
+#define ALLOW_CORO
+ACTOR Future<Void> simpleTimer2() {
+	// we need to remember the time when we first
+	// started.
+	// This needs to be a state-variable because
+	// we will use it in different parts of the
+	// actor. If you don't understand how state
+	// variables work, it is a good idea to remove
+	// the state keyword here and look at the
+	// generated C++ code from the actor compiler.
+	state double start_time = g_network->now();	
+	loop {
+		wait(delay(1.0));
+		std::cout << format("Time: %.2f\n", g_network->now() - start_time);
+	}
+}
+#undef ALLOW_CORO
 
 // A actor that demonstrates how choose-when
 // blocks work.

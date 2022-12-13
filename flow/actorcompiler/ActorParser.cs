@@ -349,7 +349,12 @@ namespace actorcompiler
                     }
                     var actorWriter = new System.IO.StringWriter();
                     actorWriter.NewLine = "\n";
-                    new ActorCompiler(actor, sourceFile, inBlocks == 0, LineNumbersEnabled, generateProbes).Write(actorWriter);
+                    if (useCoro)
+                    {
+                        new CoroCompiler(actor).Write(actorWriter);
+                    } else {
+                        new ActorCompiler(actor, sourceFile, inBlocks == 0, LineNumbersEnabled, generateProbes).Write(actorWriter);
+                    }
                     string[] actorLines = actorWriter.ToString().Split('\n');
 
                     bool hasLineNumber = false;
