@@ -332,6 +332,7 @@ namespace actorcompiler
             }
             int inBlocks = 0;
             Stack<ClassContext> classContextStack = new Stack<ClassContext>();
+            bool useCoro = false;
             for(int i=0; i<tokens.Length; i++)
             {
                 if(tokens[0].SourceLine == 0)
@@ -400,6 +401,22 @@ namespace actorcompiler
                     {
                         classContextStack.Push(new ClassContext { name = name, inBlocks = inBlocks});
                     }
+                }
+                else if ((tokens[i].Value == "#define" || tokens[i].Value == "#undef")
+                        && range(i + 1, tokens.Length).First(NonWhitespace).Value == "ALLOW_CORO")
+                {
+                    if (tokens[i].Value == "#define")
+                    {
+                        writer.WriteLine("// allow coro");
+                        useCoro = true;
+                    }
+                    else
+                    {
+                        writer.WriteLine("// disable coro");
+                        useCoro = false;
+                    }
+                    outLine++;
+                    i = range(i, tokens.Length).SkipWhile(t => t.Value != "\n" && t.Value != "\r\n").Begin;
                 }
                 else
                 {

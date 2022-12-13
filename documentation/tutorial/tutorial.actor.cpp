@@ -32,7 +32,11 @@
 #include <iostream>
 #include "flow/actorcompiler.h"
 
+#define ALLOW_CORO
+
 NetworkAddress serverAddress;
+
+#undef ALLOW_CORO
 
 enum TutorialWellKnownEndpoints {
 	WLTOKEN_SIMPLE_KV_SERVER = WLTOKEN_FIRST_AVAILABLE,
