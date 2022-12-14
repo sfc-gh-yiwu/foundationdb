@@ -20,6 +20,7 @@
 */
 
 #include "fmt/format.h"
+#include "flow/cpp20coro.h"
 #include "flow/flow.h"
 #include "flow/Platform.h"
 #include "flow/DeterministicRandom.h"
@@ -40,6 +41,7 @@ enum TutorialWellKnownEndpoints {
 	WLTOKEN_COUNT_IN_TUTORIAL
 };
 
+#define ALLOW_CORO
 // this is a simple actor that will report how long
 // it is already running once a second.
 ACTOR Future<Void> simpleTimer() {
@@ -52,23 +54,6 @@ ACTOR Future<Void> simpleTimer() {
 	// the state keyword here and look at the
 	// generated C++ code from the actor compiler.
 	state double start_time = g_network->now();
-	loop {
-		wait(delay(1.0));
-		std::cout << format("Time: %.2f\n", g_network->now() - start_time);
-	}
-}
-
-#define ALLOW_CORO
-ACTOR Future<Void> simpleTimer2() {
-	// we need to remember the time when we first
-	// started.
-	// This needs to be a state-variable because
-	// we will use it in different parts of the
-	// actor. If you don't understand how state
-	// variables work, it is a good idea to remove
-	// the state keyword here and look at the
-	// generated C++ code from the actor compiler.
-	state double start_time = g_network->now();	
 	loop {
 		wait(delay(1.0));
 		std::cout << format("Time: %.2f\n", g_network->now() - start_time);

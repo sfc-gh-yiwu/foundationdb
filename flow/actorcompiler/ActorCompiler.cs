@@ -1426,7 +1426,7 @@ namespace actorcompiler
             if (actor.parameters.Length > 0) {
                 throw new Error(actor.SourceLine, "Actor parameter not supported yet");
             }
-            writer.WriteLine("{0} {1}() {{", actor.returnType == "Void" ? "void" : actor.returnType, actor.name);
+            writer.WriteLine("Future<{0}> {1}() {{", actor.returnType, actor.name);
             Compile(actor.body, new CoroContext(writer));
             writer.WriteLine("}");
         }
