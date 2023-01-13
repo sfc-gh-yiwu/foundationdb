@@ -18,6 +18,7 @@
  * limitations under the License.
  */
 
+#include "fdbclient/FDBTypes.h"
 #include "fdbclient/NativeAPI.actor.h"
 #include "fdbserver/TesterInterface.actor.h"
 #include "fdbclient/ManagementAPI.actor.h"
@@ -30,7 +31,7 @@
 
 // "ssd" is an alias to the preferred type which skews the random distribution toward it but that's okay.
 static const char* storeTypes[] = {
-	"ssd", "ssd-1", "ssd-2", "memory", "memory-1", "memory-2", "memory-radixtree-beta"
+	"ssd", "ssd-1", "ssd-2", "memory", "memory-1", "memory-2", "memory-radixtree-beta", "ssd-redwood-1-experimental"
 };
 static const char* storageMigrationTypes[] = { "perpetual_storage_wiggle=0 storage_migration_type=aggressive",
 	                                           "perpetual_storage_wiggle=1",
@@ -234,6 +235,7 @@ struct ConfigureDatabaseWorkload : TestWorkload {
 	bool downgradeTest1; // if this is true, don't pick up downgrade incompatible config
 	std::vector<Future<Void>> clients;
 	PerfIntCounter retries;
+	EncryptionAtRestMode encryptionMode;
 
 	ConfigureDatabaseWorkload(WorkloadContext const& wcx) : TestWorkload(wcx), retries("Retries") {
 		testDuration = getOption(options, "testDuration"_sr, 200.0);
@@ -273,6 +275,13 @@ struct ConfigureDatabaseWorkload : TestWorkload {
 
 	ACTOR Future<Void> _setup(Database cx, ConfigureDatabaseWorkload* self) {
 		wait(success(ManagementAPI::changeConfig(cx.getReference(), "single storage_migration_type=aggressive", true)));
+
+		DatabaseConfiguration config = wait(getDatabaseConfiguration(cx));
+		self->encryptionMode = config.encryptionAtRestMode;
+		if (self->encryptionMode.isEncryptionEnabled()) {
+			wait(success(ManagementAPI::changeConfig(cx.getReference(), "ssd-redwood-1-experimental", true)));
+		}
+
 		return Void();
 	}
 
@@ -418,10 +427,14 @@ struct ConfigureDatabaseWorkload : TestWorkload {
 				wait(success(changeQuorum(cx, ch)));
 				//TraceEvent("ConfigureTestConfigureEnd").detail("NewQuorum", s);
 			} else if (randomChoice == 5) {
-				wait(success(IssueConfigurationChange(
-				    cx,
-				    storeTypes[deterministicRandom()->randomInt(0, sizeof(storeTypes) / sizeof(storeTypes[0]))],
-				    true)));
+				// Redwood is the only storage type supporting encryption. We cannot migrate to other storage types with
+				// encryption enabled.
+				if (!self->encryptionMode.isEncryptionEnabled()) {
+					wait(success(IssueConfigurationChange(
+					    cx,
+					    storeTypes[deterministicRandom()->randomInt(0, sizeof(storeTypes) / sizeof(storeTypes[0]))],
+					    true)));
+				}
 			} else if (randomChoice == 6) {
 				// Some configurations will be invalid, and that's fine.
 				int length = sizeof(logTypes) / sizeof(logTypes[0]);
