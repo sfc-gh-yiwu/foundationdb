@@ -1,7 +1,9 @@
+[configuration]
+disableEncryption=true
+
 [[test]]
 testTitle='CloggedConfigureDatabaseTest'
 clearAfterTest=false
-disableEncryption=true
 
     [[test.workload]]
     testName='ConfigureDatabase'
