@@ -58,7 +58,7 @@ public: // ctor & dtor
 		maxSnapDelay = getOption(options, "maxSnapDelay"_sr, 25.0);
 		testID = getOption(options, "testID"_sr, 0);
 		restartInfoLocation = getOption(options, "restartInfoLocation"_sr, "simfdb/restartInfo.ini"_sr).toString();
-		retryLimit = getOption(options, "retryLimit"_sr, 5);
+		retryLimit = getOption(options, "retryLimit"_sr, 50);
 		g_simulator->allowLogSetKills = false;
 		{
 			double duplicateSnapshotProbability = getOption(options, "duplicateSnapshotProbability"_sr, 0.1);
