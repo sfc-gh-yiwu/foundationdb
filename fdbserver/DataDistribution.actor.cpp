@@ -1156,6 +1156,7 @@ ACTOR Future<Void> ddSnapCreate(
     Reference<AsyncVar<ServerDBInfo> const> db,
     DDEnabledState* ddEnabledState,
     std::map<UID, DistributorSnapRequest>* ddSnapMap /* ongoing snapshot requests */,
+	std::map<UID, std::vector<ReplyPromise<Void>>>* dupReplies,
     std::map<UID, ErrorOr<Void>>*
         ddSnapResultMap /* finished snapshot requests, expired in SNAP_MINIMUM_TIME_GAP seconds */) {
 	state Future<Void> dbInfoChange = db->onChange();
@@ -1183,6 +1184,9 @@ ACTOR Future<Void> ddSnapCreate(
 				    .detail("SnapPayload", snapReq.snapPayload)
 				    .detail("SnapUID", snapReq.snapUID);
 				ddSnapMap->at(snapReq.snapUID).reply.send(Void());
+				for (auto& dupReply : (*dupReplies)[snapReq.snapUID]) {
+					dupReply.send(Void());
+				}
 				ddSnapMap->erase(snapReq.snapUID);
 				(*ddSnapResultMap)[snapReq.snapUID] = ErrorOr<Void>(Void());
 			}
@@ -1514,6 +1518,7 @@ ACTOR Future<Void> dataDistributor(DataDistributorInterface di, Reference<AsyncV
 	state Database cx = openDBOnServer(db, TaskPriority::DefaultDelay, LockAware::True);
 	state ActorCollection actors(false);
 	state std::map<UID, DistributorSnapRequest> ddSnapReqMap;
+	state std::map<UID, std::vector<ReplyPromise<Void>>> dupReplies;
 	state std::map<UID, ErrorOr<Void>> ddSnapReqResultMap;
 	self->addActor.send(actors.getResult());
 	self->addActor.send(traceRole(Role::DATA_DISTRIBUTOR, di.id()));
@@ -1553,11 +1558,12 @@ ACTOR Future<Void> dataDistributor(DataDistributorInterface di, Reference<AsyncV
 					CODE_PROBE(true, "Data distributor received a duplicate ongoing snapshot request");
 					TraceEvent("RetryOngoingDistributorSnapRequest").detail("SnapUID", snapUID);
 					ASSERT(snapReq.snapPayload == ddSnapReqMap[snapUID].snapPayload);
+					dupReplies[snapUID].push_back(ddSnapReqMap[snapUID].reply);
 					ddSnapReqMap[snapUID] = snapReq;
 				} else {
 					ddSnapReqMap[snapUID] = snapReq;
 					actors.add(ddSnapCreate(
-					    snapReq, db, self->context->ddEnabledState.get(), &ddSnapReqMap, &ddSnapReqResultMap));
+					    snapReq, db, self->context->ddEnabledState.get(), &ddSnapReqMap, &dupReplies, &ddSnapReqResultMap));
 					auto* ddSnapReqResultMapPtr = &ddSnapReqResultMap;
 					actors.add(fmap(
 					    [ddSnapReqResultMapPtr, snapUID](Void _) {
